@@ -10,6 +10,8 @@ protected:
 
 public:
     static constexpr luisa::string_view name = "RasterExt";
+    [[nodiscard]] virtual ResourceCreationInfo create_raster_scene() noexcept = 0;
+    [[nodiscard]] virtual void destroy_raster_scene(uint64_t handle) noexcept = 0;
     // shader
     [[nodiscard]] virtual ResourceCreationInfo create_raster_shader(
         const MeshFormat &mesh_format,

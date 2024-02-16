@@ -161,6 +161,7 @@ public:
         SPARSE_TEXTURE,
         SPARSE_BUFFER_HEAP,
         SPARSE_TEXTURE_HEAP,
+        RASTER_SCENE,
     };
 
 private:
