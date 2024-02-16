@@ -9,6 +9,8 @@ class RasterExtImpl final : public RasterExt, public vstd::IOperatorNewBase {
 
 public:
     RasterExtImpl(RasterExt *impl) : _impl{impl} {}
+    ResourceCreationInfo create_raster_scene() noexcept override;
+    void destroy_raster_scene(uint64_t handle) noexcept override;
     ResourceCreationInfo create_raster_shader(
         const MeshFormat &mesh_format,
         Function vert,

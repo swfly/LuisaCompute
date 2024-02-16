@@ -144,6 +144,8 @@ class DxRasterExt final : public RasterExt, public vstd::IOperatorNewBase {
     Device &nativeDevice;
 
 public:
+    ResourceCreationInfo create_raster_scene() noexcept override { return ResourceCreationInfo::make_invalid(); }
+    void destroy_raster_scene(uint64_t handle) noexcept override {}
     DxRasterExt(Device &nativeDevice) noexcept : nativeDevice{nativeDevice} {}
     ResourceCreationInfo create_raster_shader(
         const MeshFormat &mesh_format,

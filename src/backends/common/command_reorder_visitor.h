@@ -775,41 +775,41 @@ public:
         });
     }
     void visit(const DrawRasterSceneCommand *command) noexcept {
-        auto set_tex_dsl = [&](ShaderDispatchCommandBase::Argument::Texture const &a) {
-            add_dispatch_handle(
-                a.handle,
-                ResourceType::Texture_Buffer,
-                Range(a.level),
-                true);
-        };
-        visit<false>(command, command, command->handle(), [&] {
-            auto &&rtv = command->rtv_texs();
-            auto &&dsv = command->dsv_tex();
-            for (auto &&i : rtv) {
-                set_tex_dsl(i);
-            }
-            if (dsv.handle != ~0ull) {
-                set_tex_dsl(dsv);
-            }
-            for (auto &&mesh : command->scene()) {
-                for (auto &&v : mesh.vertex_buffers()) {
-                    add_dispatch_handle(
-                        v.handle(),
-                        ResourceType::Texture_Buffer,
-                        Range(v.offset(), v.size()),
-                        false);
-                }
-                auto &&i = mesh.index();
-                if (i.index() == 0) {
-                    auto idx = luisa::get<0>(i);
-                    add_dispatch_handle(
-                        idx.handle(),
-                        ResourceType::Texture_Buffer,
-                        Range(idx.offset_bytes(), idx.size_bytes()),
-                        false);
-                }
-            }
-        });
+        // auto set_tex_dsl = [&](ShaderDispatchCommandBase::Argument::Texture const &a) {
+        //     add_dispatch_handle(
+        //         a.handle,
+        //         ResourceType::Texture_Buffer,
+        //         Range(a.level),
+        //         true);
+        // };
+        // visit<false>(command, command, command->handle(), [&] {
+        //     auto &&rtv = command->rtv_texs();
+        //     auto &&dsv = command->dsv_tex();
+        //     for (auto &&i : rtv) {
+        //         set_tex_dsl(i);
+        //     }
+        //     if (dsv.handle != ~0ull) {
+        //         set_tex_dsl(dsv);
+        //     }
+        //     for (auto &&mesh : command->scene()) {
+        //         for (auto &&v : mesh.vertex_buffers()) {
+        //             add_dispatch_handle(
+        //                 v.handle(),
+        //                 ResourceType::Texture_Buffer,
+        //                 Range(v.offset(), v.size()),
+        //                 false);
+        //         }
+        //         auto &&i = mesh.index();
+        //         if (i.index() == 0) {
+        //             auto idx = luisa::get<0>(i);
+        //             add_dispatch_handle(
+        //                 idx.handle(),
+        //                 ResourceType::Texture_Buffer,
+        //                 Range(idx.offset_bytes(), idx.size_bytes()),
+        //                 false);
+        //         }
+        //     }
+        // });
     }
 
     // Texture : resource

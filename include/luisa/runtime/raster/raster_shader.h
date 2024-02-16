@@ -7,7 +7,6 @@
 
 namespace luisa::compute {
 
-class RasterMesh;
 class Accel;
 class BindlessArray;
 

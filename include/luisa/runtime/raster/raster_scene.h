@@ -78,7 +78,7 @@ public:
     using Resource::operator bool;
     RasterScene(
         DeviceInterface *device,
-        luisa::span<PixelFormat> render_formats,
+        luisa::span<const PixelFormat> render_formats,
         DepthFormat depth_format) noexcept;
     RasterScene(RasterScene &&) noexcept;
     RasterScene(RasterScene const &) noexcept = delete;
@@ -86,6 +86,12 @@ public:
         _move_from(std::move(rhs));
         return *this;
     }
+    template<typename Vert, typename Index>
+        requires(std::is_same_v<Index, uint16_t> || std::is_same_v<Index, uint32_t>)
+    // void emplace_back(
+    //     luisa::span<BufferView<Vert> const> vertex_buffers,
+    //     BufferView<Index> index_buffers,
+    //     );
     RasterScene &operator=(RasterScene const &) noexcept = delete;
     ~RasterScene() noexcept;
 };

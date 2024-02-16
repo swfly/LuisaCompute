@@ -55,40 +55,5 @@ public:
     luisa::unique_ptr<ShaderDispatchCommand> build() && noexcept;
 };
 
-class RasterMesh;
-
-class LC_RUNTIME_API RasterDispatchCmdEncoder final : public ShaderDispatchCmdEncoder {
-
-private:
-    std::array<ShaderDispatchCommandBase::Argument::Texture, 8u> _rtv_texs;
-    size_t _rtv_count{};
-    ShaderDispatchCommandBase::Argument::Texture _dsv_tex{};
-    luisa::vector<RasterMesh> _scene;
-    Viewport _viewport{0.f,0.f,0.f,0.f};
-    luisa::span<const Function::Binding> _bindings;
-    RasterState _raster_state;
-
-public:
-    explicit RasterDispatchCmdEncoder(uint64_t handle, size_t arg_count, size_t uniform_size,
-                                      luisa::span<const Function::Binding> bindings) noexcept;
-    RasterDispatchCmdEncoder(RasterDispatchCmdEncoder const &) noexcept = delete;
-    ~RasterDispatchCmdEncoder() noexcept;
-    RasterDispatchCmdEncoder(RasterDispatchCmdEncoder &&) noexcept;
-    RasterDispatchCmdEncoder &operator=(RasterDispatchCmdEncoder &&) noexcept;
-    void set_rtv_texs(luisa::span<const ShaderDispatchCommandBase::Argument::Texture> tex) noexcept;
-    void set_dsv_tex(ShaderDispatchCommandBase::Argument::Texture tex) noexcept;
-    void set_scene(luisa::vector<RasterMesh> &&scene) noexcept;
-    void set_viewport(Viewport viewport) noexcept;
-    void set_raster_state(const RasterState &raster_state);
-    // TODO
-    void encode_buffer(uint64_t handle, size_t offset, size_t size) noexcept;
-    void encode_texture(uint64_t handle, uint32_t level) noexcept;
-    void encode_uniform(const void *data, size_t size) noexcept;
-    void encode_bindless_array(uint64_t handle) noexcept;
-    void encode_accel(uint64_t handle) noexcept;
-    void _encode_pending_bindings() noexcept;
-    luisa::unique_ptr<DrawRasterSceneCommand> build() && noexcept;
-};
-
 }// namespace luisa::compute
 
