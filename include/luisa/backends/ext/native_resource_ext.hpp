@@ -6,7 +6,7 @@
 #include <luisa/runtime/raster/depth_buffer.h>
 #include <luisa/runtime/buffer.h>
 #include <luisa/runtime/swapchain.h>
-#include <luisa/backends/ext/raster_ext.hpp>
+#include <luisa/backends/ext/raster_ext_interface.h>
 #include <luisa/backends/ext/native_resource_ext_interface.h>
 
 namespace luisa::compute {

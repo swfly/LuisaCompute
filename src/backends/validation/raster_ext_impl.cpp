@@ -28,14 +28,6 @@ void RasterExtImpl::destroy_raster_shader(uint64_t handle) noexcept {
     RWResource::dispose(handle);
 }
 
-void RasterExtImpl::warm_up_pipeline_cache(
-    uint64_t shader_handle,
-    luisa::span<PixelFormat const> render_target_formats,
-    DepthFormat depth_format,
-    const RasterState &state) noexcept {
-    _impl->warm_up_pipeline_cache(shader_handle, render_target_formats, depth_format, state);
-}
-// depth buffer
 ResourceCreationInfo RasterExtImpl::create_depth_buffer(DepthFormat format, uint width, uint height) noexcept {
     auto buffer = _impl->create_depth_buffer(format, width, height);
     new DepthBuffer(buffer.handle);

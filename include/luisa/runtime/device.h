@@ -299,23 +299,6 @@ public:
     }
 #endif
 
-    template<typename V, typename P>
-    [[nodiscard]] typename RasterKernel<V, P>::RasterShaderType compile(
-        const RasterKernel<V, P> &kernel,
-        const MeshFormat &mesh_format,
-        const ShaderOption &option = {}) noexcept;
-
-    template<typename V, typename P>
-    void compile_to(
-        const RasterKernel<V, P> &kernel,
-        const MeshFormat &mesh_format,
-        luisa::string_view serialization_path,
-        const ShaderOption &option = {}) noexcept;
-
-    template<typename... Args>
-    RasterShader<Args...> load_raster_shader(
-        luisa::string_view shader_name) noexcept;
-
     template<size_t N, typename... Args>
     [[nodiscard]] auto load_shader(luisa::string_view shader_name) noexcept {
         return _create<Shader<N, Args...>>(shader_name);

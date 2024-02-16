@@ -9,36 +9,8 @@
 namespace luisa::compute {
 
 // see definition in rtx/accel.cpp
-RasterShaderInvoke &RasterShaderInvoke::operator<<(const Accel &accel) noexcept {
-    _command.encode_accel(accel.handle());
-    return *this;
-}
-
-// see definition in runtime/bindless_array.cpp
-RasterShaderInvoke &RasterShaderInvoke::operator<<(const BindlessArray &array) noexcept {
-    _command.encode_bindless_array(array.handle());
-    return *this;
-}
 
 #ifndef NDEBUG
-void RasterShaderInvoke::check_scene(luisa::vector<RasterMesh> const &scene) noexcept {
-    for (auto &&mesh : scene) {
-        auto vb = mesh.vertex_buffers();
-        if (vb.size() != _mesh_format->vertex_stream_count()) {
-            LUISA_ERROR("Vertex buffer count mismatch!");
-        }
-        for (size_t i = 0; i < vb.size(); ++i) {
-            auto stream = _mesh_format->attributes(i);
-            size_t target_stride = 0;
-            for (auto &s : stream) {
-                target_stride += VertexElementFormatStride(s.format);
-            }
-            if (target_stride != vb[i].stride()) {
-                LUISA_ERROR("Vertex buffer {} stride mismatch!", std::to_string(i));
-            }
-        }
-    }
-}
 namespace detail {
 bool rastershader_rettype_is_float4(Type const *t) noexcept {
     return (t->is_vector() && t->dimension() == 4 && t->element()->tag() == Type::Tag::FLOAT32);
@@ -79,15 +51,6 @@ void rastershader_check_pixel_func(Function func) noexcept {
     }
 
     LUISA_ERROR("Illegal pixel shader return type!");
-}
-void rastershader_check_rtv_format(luisa::span<const PixelFormat> rtv_format) noexcept {
-    if (rtv_format.size() > 8) {
-        LUISA_ERROR("Render target count must be less or equal than 8!");
-    }
-    for (size_t i = 0; i < rtv_format.size(); ++i) {
-        if (rtv_format[i] > PixelFormat::RGBA32F)
-            LUISA_ERROR("Illegal render target format at {}", (char)(i + 48));
-    }
 }
 }// namespace detail
 #endif
