@@ -176,18 +176,17 @@ private:
 
 public:
     explicit CustomDispatchArgumentVisitor(Stream *stream) noexcept : _stream{stream} {}
-    void visit(const CustomDispatchCommand::ResourceHandle &resource, Usage usage) noexcept override {
-        luisa::visit(
-            [&]<typename T>(T const &t) {
-                if constexpr (std::is_same_v<T, Argument::Buffer>) {
-                    _stream->mark_handle(t.handle, usage, Range{t.offset, t.size});
-                } else if constexpr (std::is_same_v<T, Argument::Texture>) {
-                    _stream->mark_handle(t.handle, usage, Range{t.level, 1});
-                } else {
-                    _stream->mark_handle(t.handle, usage, Range{});
-                }
-            },
-            resource);
+    void visit(const Argument::Buffer &t, Usage usage) noexcept override {
+        _stream->mark_handle(t.handle, usage, Range{t.offset, t.size});
+    }
+    void visit(const Argument::Texture &t, Usage usage) noexcept override {
+        _stream->mark_handle(t.handle, usage, Range{t.level, 1});
+    }
+    void visit(const Argument::BindlessArray &t, Usage usage) noexcept override {
+        _stream->mark_handle(t.handle, usage, Range{});
+    }
+    void visit(const Argument::Accel &t, Usage usage) noexcept override {
+        _stream->mark_handle(t.handle, usage, Range{});
     }
 };
 

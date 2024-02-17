@@ -3,7 +3,7 @@
 namespace luisa::compute {
 RasterScene::RasterScene(
     DeviceInterface *device,
-    luisa::span<PixelFormat> render_formats,
+    luisa::span<const PixelFormat> render_formats,
     DepthFormat depth_format) noexcept
     : Resource(device, Tag::RASTER_SCENE, static_cast<RasterExt *>(device->extension(RasterExt::name))->create_raster_scene()) {
     LUISA_ASSERT(render_formats.size() <= 8, "Render format count must be less than 8.");

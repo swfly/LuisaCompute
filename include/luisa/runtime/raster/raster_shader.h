@@ -45,17 +45,85 @@ static constexpr bool LegalDst() noexcept {
 namespace detail {
 LC_RUNTIME_API void rastershader_check_vertex_func(Function func) noexcept;
 LC_RUNTIME_API void rastershader_check_pixel_func(Function func) noexcept;
+class RasterInvokeBase {
+public:
+    ShaderDispatchCmdEncoder encoder;
+    RasterInvokeBase() noexcept = default;
+    explicit RasterInvokeBase(uint64_t handle, size_t arg_count, size_t uniform_size) noexcept
+        : encoder{handle, arg_count, uniform_size} {}
+
+    RasterInvokeBase(RasterInvokeBase &&) noexcept = default;
+    RasterInvokeBase(const RasterInvokeBase &) noexcept = delete;
+    RasterInvokeBase &operator=(RasterInvokeBase &&) noexcept = default;
+    RasterInvokeBase &operator=(const RasterInvokeBase &) noexcept = delete;
+
+    template<typename T>
+    RasterInvokeBase &operator<<(BufferView<T> buffer) noexcept {
+        encoder.encode_buffer(buffer.handle(), buffer.offset_bytes(), buffer.size_bytes());
+        return *this;
+    }
+
+    template<typename T>
+    RasterInvokeBase &operator<<(ImageView<T> image) noexcept {
+        encoder.encode_texture(image.handle(), image.level());
+        return *this;
+    }
+
+    template<typename T>
+    RasterInvokeBase &operator<<(VolumeView<T> volume) noexcept {
+        encoder.encode_texture(volume.handle(), volume.level());
+        return *this;
+    }
+
+    template<typename T>
+    RasterInvokeBase &operator<<(const Buffer<T> &buffer) noexcept {
+        buffer._check_is_valid();
+        return *this << buffer.view();
+    }
+
+    RasterInvokeBase &operator<<(const ByteBuffer &buffer) noexcept;
+
+    template<typename T>
+    RasterInvokeBase &operator<<(const Image<T> &image) noexcept {
+        image._check_is_valid();
+        return *this << image.view();
+    }
+
+    template<typename T>
+    RasterInvokeBase &operator<<(const Volume<T> &volume) noexcept {
+        volume._check_is_valid();
+        return *this << volume.view();
+    }
+
+    template<typename T>
+    RasterInvokeBase &operator<<(T data) noexcept {
+        encoder.encode_uniform(&data, sizeof(T));
+        return *this;
+    }
+
+    RasterInvokeBase &operator<<(const Accel &accel) noexcept {
+        ShaderInvokeBase::encode_accel(encoder, accel);
+        return *this;
+    }
+
+    RasterInvokeBase &operator<<(const BindlessArray &array) noexcept {
+        ShaderInvokeBase::encode_bindless_array(encoder, array);
+        return *this;
+    }
+
+    RasterInvokeBase &operator<<(const IndirectDispatchBuffer &dispatch_buffer) noexcept {
+        ShaderInvokeBase::encode_indirect_buffer(encoder, dispatch_buffer);
+        return *this;
+    }
+};
 }// namespace detail
 
-// TODO: @Maxwell fix this please
 template<typename... Args>
 class RasterShader : public Resource {
 
 private:
     friend class Device;
     RasterExt *_raster_ext{};
-    luisa::vector<Function::Binding> _bindings;
-    size_t _uniform_size{};
 #ifndef NDEBUG
     MeshFormat _mesh_format;
 #endif
@@ -79,9 +147,7 @@ private:
                   vert,
                   pixel,
                   option)),
-                  _raster_ext{raster_ext},
-         _uniform_size{ShaderDispatchCmdEncoder::compute_uniform_size(
-                detail::shader_argument_types<Args...>())}
+                  _raster_ext{raster_ext}
 #ifndef NDEBUG
         ,_mesh_format(mesh_format)
 #endif
@@ -90,15 +156,6 @@ private:
             detail::rastershader_check_vertex_func(vert);
             detail::rastershader_check_pixel_func(pixel);
 #endif
-            auto vert_bindings = vert.bound_arguments().subspan(1);
-            auto pixel_bindings = pixel.bound_arguments().subspan(1);
-            _bindings.reserve(vert_bindings.size() + pixel_bindings.size());
-            for(auto&& i : vert_bindings){
-                _bindings.emplace_back(i);
-            }
-            for(auto&& i : pixel_bindings){
-                _bindings.emplace_back(i);
-            }
         }
     // AOT Shader
     RasterShader(
@@ -114,9 +171,7 @@ private:
                 mesh_format,
                 detail::shader_argument_types<Args...>(),
                 file_path)),
-            _raster_ext{raster_ext},
-            _uniform_size{ShaderDispatchCmdEncoder::compute_uniform_size(
-                detail::shader_argument_types<Args...>())}
+            _raster_ext{raster_ext}
 #ifndef NDEBUG
         ,_mesh_format(mesh_format)
 #endif
@@ -137,6 +192,9 @@ public:
         if (*this) { _raster_ext->destroy_raster_shader(handle()); }
     }
     using Resource::operator bool;
+    static size_t uniform_size() noexcept {
+        return ShaderDispatchCmdEncoder::compute_uniform_size(detail::shader_argument_types<Args...>());
+    }
 };
 
 }// namespace luisa::compute

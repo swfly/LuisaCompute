@@ -63,13 +63,18 @@ struct prototype_to_shader_invocation<SOA<T>> {
 
 template<typename T>
 using prototype_to_shader_invocation_t = typename prototype_to_shader_invocation<T>::type;
-
 class LC_RUNTIME_API ShaderInvokeBase {
 
 private:
     ComputeDispatchCmdEncoder _encoder;
 
 public:
+    // // see definition in runtime/bindless_array.cpp
+    static void encode_bindless_array(ShaderDispatchCmdEncoder &encoder, const BindlessArray &array) noexcept;
+    // // see definition in rtx/accel.cpp
+    static void encode_accel(ShaderDispatchCmdEncoder &encoder, const Accel &accel) noexcept;
+    // // see definition in runtime/dispatch_buffer.cpp
+    static void encode_indirect_buffer(ShaderDispatchCmdEncoder &encoder, const IndirectDispatchBuffer &indirect_buffer) noexcept;
     explicit ShaderInvokeBase(uint64_t handle, size_t arg_count, size_t uniform_size) noexcept
         : _encoder{handle, arg_count, uniform_size} {}
 
@@ -128,14 +133,20 @@ public:
         return *this;
     }
 
-    // see definition in rtx/accel.cpp
-    ShaderInvokeBase &operator<<(const Accel &accel) noexcept;
+    ShaderInvokeBase &operator<<(const Accel &accel) noexcept {
+        encode_accel(_encoder, accel);
+        return *this;
+    }
 
-    // see definition in runtime/bindless_array.cpp
-    ShaderInvokeBase &operator<<(const BindlessArray &array) noexcept;
+    ShaderInvokeBase &operator<<(const BindlessArray &array) noexcept {
+        encode_bindless_array(_encoder, array);
+        return *this;
+    }
 
-    // see definition in runtime/dispatch_buffer.cpp
-    ShaderInvokeBase &operator<<(const IndirectDispatchBuffer &array) noexcept;
+    ShaderInvokeBase &operator<<(const IndirectDispatchBuffer &dispatch_buffer) noexcept {
+        encode_indirect_buffer(_encoder, dispatch_buffer);
+        return *this;
+    }
 
 protected:
     [[nodiscard]] auto _parallelize(uint3 dispatch_size) noexcept {

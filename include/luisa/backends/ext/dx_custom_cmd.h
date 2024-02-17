@@ -17,6 +17,12 @@ namespace luisa::compute {
 class DXCustomCmd : public CustomDispatchCommand {
 
 public:
+    using ResourceHandle = luisa::variant<
+        Argument::Buffer,
+        Argument::Texture,
+        Argument::BindlessArray,
+        Argument::Accel>;
+
     struct ResourceUsage {
         ResourceHandle resource;
         D3D12_RESOURCE_STATES required_state;
@@ -69,7 +75,22 @@ public:
     void traverse_arguments(ArgumentVisitor &visitor) const noexcept override {
         auto usages = get_resource_usages();
         for (auto &&[handle, state] : usages) {
-            visitor.visit(handle, resource_state_to_usage(state));
+            switch (handle.index()) {
+                case 0:
+                    visitor.visit(luisa::get<0>(handle), resource_state_to_usage(state));
+                    break;
+                case 1:
+                    visitor.visit(luisa::get<1>(handle), resource_state_to_usage(state));
+                    break;
+                case 2:
+                    visitor.visit(luisa::get<2>(handle), resource_state_to_usage(state));
+                    break;
+                case 3:
+                    visitor.visit(luisa::get<3>(handle), resource_state_to_usage(state));
+                    break;
+                default:
+                    LUISA_ERROR("Bad.");
+            }
         }
     }
     DXCustomCmd() noexcept = default;

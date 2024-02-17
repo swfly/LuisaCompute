@@ -3,6 +3,7 @@
 #include <luisa/runtime/rhi/command.h>
 #include <luisa/runtime/raster/raster_state.h>
 #include <luisa/backends/ext/registry.h>
+#include <luisa/runtime/rhi/command_encoder.h>
 
 namespace luisa::compute {
 struct VertexBufferView {
@@ -21,77 +22,88 @@ struct IndexBufferView {
     IndexFormat format;
 };
 class LC_RUNTIME_API BuildRasterSceneCommand final : public CustomCommand {
+    friend lc::validation::Stream;
 public:
     struct Modification {
         luisa::fixed_vector<VertexBufferView, 2> vertex_buffers;
         luisa::variant<IndexBufferView, uint> index_buffer;
-        RasterState state;
-        uint64_t shader_handle;
+        ShaderDispatchCmdEncoder encoder;
         uint instance;
+        RasterState state;
+        uint flag;
         static constexpr auto flag_instance = 1u << 0u;
         static constexpr auto flag_shader = 1u << 1u;
         static constexpr auto flag_index_buffer = 1u << 2u;
         static constexpr auto flag_vertex_buffer = 1u << 3u;
         static constexpr auto flag_state = 1u << 4u;
+        static constexpr auto flag_all = ~0u;
     };
 
 private:
     uint64_t _handle;
     uint32_t _element_count;
     luisa::vector<Modification> _modifications;
+    luisa::fixed_vector<PixelFormat, 8> _render_formats;
+    DepthFormat _depth_format;
 
 public:
     [[nodiscard]] auto handle() const noexcept { return _handle; }
     [[nodiscard]] auto element_count() const noexcept { return _element_count; }
     [[nodiscard]] auto modifications() const noexcept { return luisa::span{_modifications}; }
+    [[nodiscard]] auto render_formats() const noexcept { return luisa::span{_render_formats}; }
+    [[nodiscard]] auto depth_format() const noexcept { return _depth_format; }
     BuildRasterSceneCommand(
         uint64_t handle, uint32_t element_count,
-        luisa::vector<Modification> modifications) noexcept
+        luisa::vector<Modification> modifications,
+        luisa::span<PixelFormat const> render_formats,
+        DepthFormat depth_format) noexcept
         : _handle(handle),
           _element_count(element_count),
-          _modifications(std::move(modifications)) {}
+          _modifications(std::move(modifications)),
+          _depth_format(depth_format) {
+        _render_formats.push_back_uninitialized(render_formats.size());
+        std::memcpy(_render_formats.data(), render_formats.data(), render_formats.size_bytes());
+    }
+    BuildRasterSceneCommand(BuildRasterSceneCommand const &) = delete;
+    BuildRasterSceneCommand &operator=(BuildRasterSceneCommand const &) = delete;
     [[nodiscard]] uint64_t uuid() const noexcept override { return to_underlying(CustomCommandUUID::RASTER_BUILD_SCENE); }
     LUISA_MAKE_COMMAND_COMMON(StreamTag::GRAPHICS)
 };
 
-class LC_RUNTIME_API DrawRasterSceneCommand final : public CustomCommand, public ShaderDispatchCommandBase {
-    //     friend lc::validation::Stream;
+class LC_RUNTIME_API DrawRasterSceneCommand final : public CustomDispatchCommand {
+    friend lc::validation::Stream;
+private:
+    uint64_t _scene_handle;
+    float4x4 _view;
+    float4x4 _projection;
+    luisa::fixed_vector<Argument::Texture, 8> _rtv_texs;
+    Argument::Texture _dsv_tex;
+    Viewport _viewport;
 
-    // private:
-    //     std::array<Argument::Texture, 8u> _rtv_texs;
-    //     size_t _rtv_count;
-    //     Argument::Texture _dsv_tex;
-    //     luisa::vector<RasterMesh> _scene;
-    //     Viewport _viewport;
-    //     RasterState _raster_state;
-
-    // public:
-    //     DrawRasterSceneCommand(uint64_t shader_handle,
-    //                            luisa::vector<std::byte> &&argument_buffer,
-    //                            size_t argument_count,
-    //                            std::array<Argument::Texture, 8u> rtv_textures,
-    //                            size_t rtv_count,
-    //                            Argument::Texture dsv_texture,
-    //                            luisa::vector<RasterMesh> &&scene,
-    //                            Viewport viewport,
-    //                            const RasterState &raster_state) noexcept
-    //         : ShaderDispatchCommandBase{
-    //               shader_handle, std::move(argument_buffer), argument_count},
-    //           _rtv_texs{rtv_textures}, _rtv_count{rtv_count}, _dsv_tex{dsv_texture}, _scene{std::move(scene)}, _viewport{viewport}, _raster_state{raster_state} {
-    //     }
-
-    // public:
-    //     DrawRasterSceneCommand(DrawRasterSceneCommand const &) noexcept = delete;
-    //     DrawRasterSceneCommand(DrawRasterSceneCommand &&) noexcept = default;
-    //     ~DrawRasterSceneCommand() noexcept override = default;
-    //     [[nodiscard]] auto rtv_texs() const noexcept { return luisa::span{_rtv_texs.data(), _rtv_count}; }
-    //     [[nodiscard]] auto const &dsv_tex() const noexcept { return _dsv_tex; }
-    //     [[nodiscard]] auto const &raster_state() const noexcept { return _raster_state; }
-    //     [[nodiscard]] auto scene() const noexcept {
-    //         return luisa::span{_scene};
-    //     }
-    //     [[nodiscard]] auto viewport() const noexcept { return _viewport; }
-    //     [[nodiscard]] uint64_t uuid() const noexcept override { return to_underlying(CustomCommandUUID::RASTER_DRAW_SCENE); }
+public:
+    DrawRasterSceneCommand(
+        uint64_t scene_handle,
+        float4x4 const &view,
+        float4x4 const &projection,
+        luisa::span<Argument::Texture> rtv_texs,
+        Argument::Texture dsv_tex,
+        Viewport viewport) noexcept
+        : _scene_handle(scene_handle),
+          _view(view),
+          _projection(projection),
+          _dsv_tex(dsv_tex),
+          _viewport(viewport) {
+    }
+    [[nodiscard]] auto scene_handle() const noexcept { return _scene_handle; }
+    [[nodiscard]] auto view() const noexcept { return _view; }
+    [[nodiscard]] auto projection() const noexcept { return _projection; }
+    [[nodiscard]] auto rtv_texs() const noexcept { return luisa::span{_rtv_texs}; }
+    [[nodiscard]] auto const &dsv_tex() const noexcept { return _dsv_tex; }
+    [[nodiscard]] auto viewport() const noexcept { return _viewport; }
+    [[nodiscard]] uint64_t uuid() const noexcept override { return to_underlying(CustomCommandUUID::RASTER_DRAW_SCENE); }
+    void traverse_arguments(ArgumentVisitor &visitor) const noexcept override {
+        // TODO
+    }
     LUISA_MAKE_COMMAND_COMMON(StreamTag::GRAPHICS)
 };
 

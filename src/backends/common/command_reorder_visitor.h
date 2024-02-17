@@ -38,7 +38,8 @@ struct ReorderFuncTable{
 }
 */
 concept ReorderFuncTable =
-    requires(const T t, uint64_t uint64_v, size_t size_v, luisa::span<const BindlessArrayUpdateCommand::Modification> modification) {
+    requires(const T t, uint64_t uint64_v, size_t size_v,
+             luisa::span<const BindlessArrayUpdateCommand::Modification> modification) {
         requires(std::is_same_v<bool, decltype(t.is_res_in_bindless(uint64_v, uint64_v))>);
         requires(std::is_same_v<Usage, decltype(t.get_usage(uint64_v, size_v))>);
         t.update_bindless(uint64_v, modification);
@@ -451,15 +452,15 @@ private:
             case ResourceType::Accel: {
                 auto handle = static_cast<NoRangeHandle *>(src_handle);
                 handle->view.read_layer = std::max<int64_t>(layer, handle->view.read_layer);
-            }break;
+            } break;
             case ResourceType::Bindless: {
                 auto handle = static_cast<BindlessHandle *>(src_handle);
                 handle->view.read_layer = std::max<int64_t>(layer, handle->view.read_layer);
-            }break;
-            default:{
+            } break;
+            default: {
                 auto handle = static_cast<RangeHandle *>(src_handle);
                 handle->emplace_read_layer(read_range, layer);
-            }break;
+            } break;
         }
         return layer;
     }
@@ -556,57 +557,52 @@ private:
         _use_accel_in_pass = false;
         _dispatch_layer = 0;
 
-        auto f = [&](auto &resource, auto usage) noexcept {
-            luisa::visit(
-                [&]<typename T>(T const &t) {
-                    if constexpr (std::is_same_v<T, Argument::Buffer>) {
-                        add_dispatch_handle(
-                            t.handle,
-                            ResourceType::Texture_Buffer,
-                            Range(t.offset, t.size),
-                            ((uint)usage & (uint)Usage::WRITE) != 0);
-                    } else if constexpr (std::is_same_v<T, Argument::Texture>) {
-                        add_dispatch_handle(
-                            t.handle,
-                            ResourceType::Texture_Buffer,
-                            Range(t.level, 1),
-                            ((uint)usage & (uint)Usage::WRITE) != 0);
+        auto f = [&]<typename T>(T const &t, Usage usage) {
+            if constexpr (std::is_same_v<T, Argument::Buffer>) {
+                add_dispatch_handle(
+                    t.handle,
+                    ResourceType::Texture_Buffer,
+                    Range(t.offset, t.size),
+                    ((uint)usage & (uint)Usage::WRITE) != 0);
+            } else if constexpr (std::is_same_v<T, Argument::Texture>) {
+                add_dispatch_handle(
+                    t.handle,
+                    ResourceType::Texture_Buffer,
+                    Range(t.level, 1),
+                    ((uint)usage & (uint)Usage::WRITE) != 0);
 
-                    } else if constexpr (std::is_same_v<T, Argument::BindlessArray>) {
-                        _use_bindless_in_pass = true;
-                        {
-                            _func_table.lock_bindless(t.handle);
-                            auto unlocker = vstd::scope_exit([&] {
-                                _func_table.unlock_bindless(t.handle);
-                            });
-                            for (auto &&res : _write_res_map) {
-                                if (_func_table.is_res_in_bindless(t.handle, res)) {
-                                    add_dispatch_handle(
-                                        res,
-                                        ResourceType::Texture_Buffer,
-                                        Range{},
-                                        false);
-                                }
-                            }
+            } else if constexpr (std::is_same_v<T, Argument::BindlessArray>) {
+                _use_bindless_in_pass = true;
+                {
+                    _func_table.lock_bindless(t.handle);
+                    auto unlocker = vstd::scope_exit([&] {
+                        _func_table.unlock_bindless(t.handle);
+                    });
+                    for (auto &&res : _write_res_map) {
+                        if (_func_table.is_res_in_bindless(t.handle, res)) {
+                            add_dispatch_handle(
+                                res,
+                                ResourceType::Texture_Buffer,
+                                Range{},
+                                false);
                         }
-                        add_dispatch_handle(
-                            t.handle,
-                            ResourceType::Bindless,
-                            Range(),
-                            false);
-                    } else {
-                        _use_accel_in_pass = true;
-                        add_dispatch_handle(
-                            t.handle,
-                            ResourceType::Accel,
-                            Range(),
-                            false);
                     }
-                },
-                resource);
+                }
+                add_dispatch_handle(
+                    t.handle,
+                    ResourceType::Bindless,
+                    Range(),
+                    false);
+            } else {
+                _use_accel_in_pass = true;
+                add_dispatch_handle(
+                    t.handle,
+                    ResourceType::Accel,
+                    Range(),
+                    false);
+            }
         };
         command->traverse_arguments(f);
-
         for (auto &&i : _dispatch_read_handle) {
             set_read_layer(i.second, i.first, _dispatch_layer);
         }
@@ -774,44 +770,6 @@ public:
             }
         });
     }
-    void visit(const DrawRasterSceneCommand *command) noexcept {
-        // auto set_tex_dsl = [&](ShaderDispatchCommandBase::Argument::Texture const &a) {
-        //     add_dispatch_handle(
-        //         a.handle,
-        //         ResourceType::Texture_Buffer,
-        //         Range(a.level),
-        //         true);
-        // };
-        // visit<false>(command, command, command->handle(), [&] {
-        //     auto &&rtv = command->rtv_texs();
-        //     auto &&dsv = command->dsv_tex();
-        //     for (auto &&i : rtv) {
-        //         set_tex_dsl(i);
-        //     }
-        //     if (dsv.handle != ~0ull) {
-        //         set_tex_dsl(dsv);
-        //     }
-        //     for (auto &&mesh : command->scene()) {
-        //         for (auto &&v : mesh.vertex_buffers()) {
-        //             add_dispatch_handle(
-        //                 v.handle(),
-        //                 ResourceType::Texture_Buffer,
-        //                 Range(v.offset(), v.size()),
-        //                 false);
-        //         }
-        //         auto &&i = mesh.index();
-        //         if (i.index() == 0) {
-        //             auto idx = luisa::get<0>(i);
-        //             add_dispatch_handle(
-        //                 idx.handle(),
-        //                 ResourceType::Texture_Buffer,
-        //                 Range(idx.offset_bytes(), idx.size_bytes()),
-        //                 false);
-        //         }
-        //     }
-        // });
-    }
-
     // Texture : resource
     void visit(const TextureUploadCommand *command) noexcept override {
         add_command(command, set_write(command->handle(), copy_range(command->level(), 1), ResourceType::Texture_Buffer));
@@ -844,7 +802,8 @@ public:
         add_command(command, layer);
     }
 
-    void visit(const CurveBuildCommand *) noexcept override { /* TODO */ }
+    void visit(const CurveBuildCommand *) noexcept override { /* TODO */
+    }
 
     // Mesh : conclude vertex and triangle buffers
     void visit(const MeshBuildCommand *command) noexcept override {
@@ -874,8 +833,6 @@ public:
                 visit(static_cast<ClearDepthCommand const *>(command));
                 break;
             case to_underlying(CustomCommandUUID::RASTER_DRAW_SCENE):
-                visit(static_cast<DrawRasterSceneCommand const *>(command));
-                break;
             case to_underlying(CustomCommandUUID::CUSTOM_DISPATCH):
                 visit(static_cast<CustomDispatchCommand const *>(command));
                 break;
