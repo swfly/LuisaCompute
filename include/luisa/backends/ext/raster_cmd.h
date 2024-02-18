@@ -66,11 +66,13 @@ public:
     }
     BuildRasterSceneCommand(BuildRasterSceneCommand const &) = delete;
     BuildRasterSceneCommand &operator=(BuildRasterSceneCommand const &) = delete;
+    BuildRasterSceneCommand &operator=(BuildRasterSceneCommand &&) = default;
+    BuildRasterSceneCommand(BuildRasterSceneCommand &&) = default;
     [[nodiscard]] uint64_t uuid() const noexcept override { return to_underlying(CustomCommandUUID::RASTER_BUILD_SCENE); }
     LUISA_MAKE_COMMAND_COMMON(StreamTag::GRAPHICS)
 };
 
-class LC_RUNTIME_API DrawRasterSceneCommand final : public CustomDispatchCommand {
+class LC_RUNTIME_API DrawRasterSceneCommand final : public CustomCommand {
     friend lc::validation::Stream;
 private:
     uint64_t _scene_handle;
@@ -85,7 +87,7 @@ public:
         uint64_t scene_handle,
         float4x4 const &view,
         float4x4 const &projection,
-        luisa::span<Argument::Texture> rtv_texs,
+        luisa::span<Argument::Texture const> rtv_texs,
         Argument::Texture dsv_tex,
         Viewport viewport) noexcept
         : _scene_handle(scene_handle),
@@ -101,9 +103,6 @@ public:
     [[nodiscard]] auto const &dsv_tex() const noexcept { return _dsv_tex; }
     [[nodiscard]] auto viewport() const noexcept { return _viewport; }
     [[nodiscard]] uint64_t uuid() const noexcept override { return to_underlying(CustomCommandUUID::RASTER_DRAW_SCENE); }
-    void traverse_arguments(ArgumentVisitor &visitor) const noexcept override {
-        // TODO
-    }
     LUISA_MAKE_COMMAND_COMMON(StreamTag::GRAPHICS)
 };
 

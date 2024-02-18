@@ -5,6 +5,7 @@
 #include <luisa/core/spin_mutex.h>
 #include <luisa/runtime/raster/raster_state.h>
 #include <luisa/runtime/raster/raster_shader.h>
+#include <luisa/runtime/raster/depth_buffer.h>
 namespace lc::validation {
 class Stream;
 }// namespace lc::validation
@@ -231,7 +232,16 @@ public:
         mod.encoder = encode_binds(shader, args...);
         mod.flag |= Modification::flag_shader;
     }
-
+    [[nodiscard]] luisa::unique_ptr<Command> draw(
+        float4x4 const &view,
+        float4x4 const &projection,
+        luisa::span<const ImageView<float>> rtv_texs,
+        DepthBuffer const *depth,
+        Viewport viewport) const noexcept;
+    [[nodiscard]] luisa::unique_ptr<Command> build() noexcept;
+    [[nodiscard]] luisa::unique_ptr<Command> build(
+        luisa::span<const PixelFormat> render_formats,
+        DepthFormat depth_format) noexcept;
     RasterScene &operator=(RasterScene const &) noexcept = delete;
     ~RasterScene() noexcept;
 };

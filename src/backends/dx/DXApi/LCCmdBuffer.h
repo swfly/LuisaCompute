@@ -24,27 +24,35 @@ struct ButtomCompactCmd {
     size_t size;
 };
 struct ReorderFuncTable {
-    static bool is_res_in_bindless(uint64_t bindless_handle, uint64_t resource_handle) noexcept  {
+    static bool is_res_in_bindless(uint64_t bindless_handle, uint64_t resource_handle) noexcept {
         return reinterpret_cast<BindlessArray *>(bindless_handle)->IsPtrInBindless(resource_handle);
     }
-    static Usage get_usage(uint64_t shader_handle, size_t argument_index) noexcept  {
+    static Usage get_usage(uint64_t shader_handle, size_t argument_index) noexcept {
         auto cs = reinterpret_cast<ComputeShader *>(shader_handle);
         return cs->Args()[argument_index].varUsage;
     }
-    static void update_bindless(uint64_t handle, luisa::span<const BindlessArrayUpdateCommand::Modification> modifications) noexcept  {
+    static void update_bindless(uint64_t handle, luisa::span<const BindlessArrayUpdateCommand::Modification> modifications) noexcept {
         reinterpret_cast<BindlessArray *>(handle)->Bind(modifications);
     }
-    static luisa::span<const Argument> shader_bindings(uint64_t handle) noexcept  {
+    static luisa::span<const Argument> shader_bindings(uint64_t handle) noexcept {
         return reinterpret_cast<ComputeShader const *>(handle)->ArgBindings();
     }
-    static void lock_bindless(uint64_t bindless_handle) noexcept  {
+    static void lock_bindless(uint64_t bindless_handle) noexcept {
         reinterpret_cast<BindlessArray *>(bindless_handle)->Lock();
     }
-    static void unlock_bindless(uint64_t bindless_handle) noexcept  {
+    static void unlock_bindless(uint64_t bindless_handle) noexcept {
         reinterpret_cast<BindlessArray *>(bindless_handle)->Unlock();
     }
+    template<typename Func>
+        requires(std::is_invocable_v<Func, Argument::Buffer, Usage> &&
+                 std::is_invocable_v<Func, Argument::Texture, Usage> &&
+                 std::is_invocable_v<Func, Argument::Accel, Usage> &&
+                 std::is_invocable_v<Func, Argument::BindlessArray, Usage>)
+    static void traversal_arguments(Func &&func, DrawRasterSceneCommand const *cmd) {
+        // TODO
+    }
 };
-class LCCmdBuffer final : public CmdQueueBase{
+class LCCmdBuffer final : public CmdQueueBase {
 protected:
     ResourceStateTracker tracker;
     ReorderFuncTable reorderFuncTable;

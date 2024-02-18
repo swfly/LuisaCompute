@@ -39,12 +39,15 @@ struct ReorderFuncTable{
 */
 concept ReorderFuncTable =
     requires(const T t, uint64_t uint64_v, size_t size_v,
+             void (*traversal)(luisa::variant<Argument::Buffer, Argument::Texture, Argument::BindlessArray, Argument::Accel>, Usage usage),
+             DrawRasterSceneCommand const*draw_raster_cmd,
              luisa::span<const BindlessArrayUpdateCommand::Modification> modification) {
         requires(std::is_same_v<bool, decltype(t.is_res_in_bindless(uint64_v, uint64_v))>);
         requires(std::is_same_v<Usage, decltype(t.get_usage(uint64_v, size_v))>);
         t.update_bindless(uint64_v, modification);
         t.lock_bindless(uint64_v);
         t.unlock_bindless(uint64_v);
+        t.traversal_arguments(traversal, draw_raster_cmd);
         requires(std::is_same_v<luisa::span<const Argument>, decltype(t.shader_bindings(uint64_v))>);
     };
 
@@ -550,7 +553,8 @@ private:
     }
 
     FuncTable _func_table;
-    void visit(const CustomDispatchCommand *command) noexcept {
+    template<typename CustomCmd>
+    void visit_dispatch(const CustomCmd *command) noexcept {
         _dispatch_read_handle.clear();
         _dispatch_write_handle.clear();
         _use_bindless_in_pass = false;
@@ -602,7 +606,10 @@ private:
                     false);
             }
         };
-        command->traverse_arguments(f);
+        if constexpr (std::is_same_v<CustomCmd, CustomDispatchCommand>)
+            command->traverse_arguments(f);
+        else
+            _func_table.traversal_arguments(f, command);
         for (auto &&i : _dispatch_read_handle) {
             set_read_layer(i.second, i.first, _dispatch_layer);
         }
@@ -833,8 +840,10 @@ public:
                 visit(static_cast<ClearDepthCommand const *>(command));
                 break;
             case to_underlying(CustomCommandUUID::RASTER_DRAW_SCENE):
+                visit_dispatch(static_cast<DrawRasterSceneCommand const *>(command));
+                break;
             case to_underlying(CustomCommandUUID::CUSTOM_DISPATCH):
-                visit(static_cast<CustomDispatchCommand const *>(command));
+                visit_dispatch(static_cast<CustomDispatchCommand const *>(command));
                 break;
             default:
                 LUISA_ERROR("Custom command not supported by reorder.");
