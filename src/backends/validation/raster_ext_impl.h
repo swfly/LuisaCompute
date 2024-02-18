@@ -8,6 +8,9 @@ class RasterExtImpl final : public RasterExt, public vstd::IOperatorNewBase {
     RasterExt *_impl;
 
 public:
+    DeviceInterface *device() noexcept override {
+        return _impl->device();
+    }
     RasterExtImpl(RasterExt *impl) : _impl{impl} {}
     ResourceCreationInfo create_raster_scene() noexcept override;
     void destroy_raster_scene(uint64_t handle) noexcept override;

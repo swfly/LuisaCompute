@@ -17,8 +17,8 @@ VertexBufferView make_vbv(T const &buffer_view) noexcept {
     return VertexBufferView{
         .handle = buffer_view.handle(),
         .offset = buffer_view.offset_bytes(),
-        .size = buffer_view.size_bytes(),
-        .stride = buffer_view.stride(),
+        .size = static_cast<uint>(buffer_view.size()),
+        .stride = static_cast<uint>(buffer_view.stride()),
     };
 }
 
@@ -66,6 +66,7 @@ struct RasterMesh {
 };
 }// namespace detail
 class LC_RUNTIME_API RasterScene : public Resource {
+    friend class RasterExt;
 public:
     using Modification = BuildRasterSceneCommand::Modification;
 private:
@@ -74,27 +75,35 @@ private:
     luisa::unordered_map<size_t, Modification> _modifications;
     mutable luisa::spin_mutex _mtx;
     size_t _instance_count{};
-
-public:
-    using Resource::operator bool;
     RasterScene(
         DeviceInterface *device,
         luisa::span<const PixelFormat> render_formats,
         DepthFormat depth_format) noexcept;
-    RasterScene(RasterScene &&) noexcept;
-    RasterScene(RasterScene const &) noexcept = delete;
-    RasterScene &operator=(RasterScene &&rhs) noexcept {
-        _move_from(std::move(rhs));
-        return *this;
-    }
     template<typename... Args>
     static auto encode_binds(RasterShader<Args...> const &shader, Args &&...args) noexcept {
         using invoke_type = detail::RasterInvokeBase;
         auto arg_count = (0u + ... + detail::shader_argument_encode_count<Args>::value);
         invoke_type invoke{shader.handle(), arg_count, RasterShader<Args...>::uniform_size()};
         static_cast<void>((invoke << ... << args));
-        return invoke;
+        return std::move(invoke.encoder);
     }
+    template<typename T>
+    static IndexBufferView make_idx_view(BufferView<T> b) {
+        return IndexBufferView{
+            .handle = b.handle(),
+            .size = static_cast<uint>(b.size()),
+            .format = std::is_same_v<T, uint16_t> ? IndexFormat::UInt16 : IndexFormat::UInt32
+        };
+    }
+public:
+    using Resource::operator bool;
+    RasterScene(RasterScene &&) noexcept;
+    RasterScene(RasterScene const &) noexcept = delete;
+    RasterScene &operator=(RasterScene &&rhs) noexcept {
+        _move_from(std::move(rhs));
+        return *this;
+    }
+
     template<typename Vert, typename Index, typename... Args>
         requires(std::is_same_v<Index, uint16_t> || std::is_same_v<Index, uint32_t>)
     void emplace_back(
@@ -105,8 +114,8 @@ public:
         RasterShader<Args...> const &shader,
         Args &&...args) noexcept {
         Modification mod{
-            .index_buffer = index_buffer,
-            .encoder = encode_binds(shader, args...),
+            .index_buffer = make_idx_view(index_buffer),
+            .encoder = encode_binds(shader, std::forward<Args>(args)...),
             .instance = instance_count,
             .state = state,
             .flag = Modification::flag_all};
@@ -127,7 +136,7 @@ public:
         Args &&...args) noexcept {
         Modification mod{
             .index_buffer = draw_index_count,
-            .encoder = encode_binds(shader, args...),
+            .encoder = encode_binds(shader, std::forward<Args>(args)...),
             .instance = instance_count,
             .state = state,
             .flag = Modification::flag_all};
@@ -149,8 +158,8 @@ public:
         RasterShader<Args...> const &shader,
         Args &&...args) noexcept {
         Modification mod{
-            .index_buffer = index_buffer,
-            .encoder = encode_binds(shader, args...),
+            .index_buffer = make_idx_view(index_buffer),
+            .encoder = encode_binds(shader, std::forward<Args>(args)...),
             .instance = instance_count,
             .state = state,
             .flag = Modification::flag_all};
@@ -171,7 +180,7 @@ public:
         Args &&...args) noexcept {
         Modification mod{
             .index_buffer = draw_index_count,
-            .encoder = encode_binds(shader, args...),
+            .encoder = encode_binds(shader, std::forward<Args>(args)...),
             .instance = instance_count,
             .state = state,
             .flag = Modification::flag_all};
@@ -202,7 +211,7 @@ public:
         BufferView<Index> index_buffer) noexcept {
         std::lock_guard lck{_mtx};
         auto &mod = _modifications.try_emplace(idx).first->second;
-        mod.index_buffer = index_buffer;
+        mod.index_buffer = make_idx_view(index_buffer);
         mod.flag |= Modification::flag_index_buffer;
     }
     void set_index(
@@ -229,7 +238,7 @@ public:
         Args &&...args) noexcept {
         std::lock_guard lck{_mtx};
         auto &mod = _modifications.try_emplace(idx).first->second;
-        mod.encoder = encode_binds(shader, args...);
+        mod.encoder = encode_binds(shader, std::forward<Args>(args)...);
         mod.flag |= Modification::flag_shader;
     }
     [[nodiscard]] luisa::unique_ptr<Command> draw(

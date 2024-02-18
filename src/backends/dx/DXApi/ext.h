@@ -139,14 +139,14 @@ public:
         }
     }
 };
-class Device;
 class DxRasterExt final : public RasterExt, public vstd::IOperatorNewBase {
-    Device &nativeDevice;
+    LCDevice &dev;
 
 public:
+    DeviceInterface *device() noexcept override;
     ResourceCreationInfo create_raster_scene() noexcept override { return ResourceCreationInfo::make_invalid(); }
     void destroy_raster_scene(uint64_t handle) noexcept override {}
-    DxRasterExt(Device &nativeDevice) noexcept : nativeDevice{nativeDevice} {}
+    DxRasterExt(LCDevice &dev) noexcept : dev{dev} {}
     ResourceCreationInfo create_raster_shader(
         const MeshFormat &mesh_format,
         Function vert,

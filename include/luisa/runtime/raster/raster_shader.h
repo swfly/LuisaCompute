@@ -120,7 +120,7 @@ public:
 
 template<typename... Args>
 class RasterShader : public Resource {
-
+    friend class RasterExt;
 private:
     friend class Device;
     RasterExt *_raster_ext{};
@@ -162,7 +162,7 @@ private:
         DeviceInterface *device,
         RasterExt* raster_ext,
         const MeshFormat &mesh_format,
-        string_view file_path)noexcept
+        luisa::string_view file_path)noexcept
         : Resource(
               device,
               Tag::RASTER_SHADER,

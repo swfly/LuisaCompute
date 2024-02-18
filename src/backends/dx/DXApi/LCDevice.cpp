@@ -76,7 +76,7 @@ LCDevice::LCDevice(Context &&ctx, DeviceConfig const *settings)
     exts.try_emplace(
         RasterExt::name,
         [](LCDevice *device) -> DeviceExtension * {
-            return new DxRasterExt(device->nativeDevice);
+            return new DxRasterExt(*device);
         },
         [](DeviceExtension *ext) {
             delete static_cast<DxRasterExt *>(ext);
@@ -508,8 +508,8 @@ ResourceCreationInfo DxRasterExt::create_raster_shader(
     if (option.compile_only) {
         assert(!option.name.empty());
         RasterShader::SaveRaster(
-            nativeDevice.fileIo,
-            &nativeDevice,
+            dev.nativeDevice.fileIo,
+            &dev.nativeDevice,
             code,
             checkMD5,
             option.name,
@@ -534,8 +534,8 @@ ResourceCreationInfo DxRasterExt::create_raster_shader(
         }
         ResourceCreationInfo info;
         auto res = RasterShader::CompileRaster(
-            nativeDevice.fileIo,
-            &nativeDevice,
+            dev.nativeDevice.fileIo,
+            &dev.nativeDevice,
             vert,
             pixel,
             [&] { return std::move(code); },
@@ -557,8 +557,8 @@ ResourceCreationInfo DxRasterExt::load_raster_shader(
     string_view ser_path) noexcept {
     ResourceCreationInfo info;
     auto res = RasterShader::LoadRaster(
-        nativeDevice.fileIo,
-        &nativeDevice,
+        dev.nativeDevice.fileIo,
+        &dev.nativeDevice,
         mesh_format,
         types,
         ser_path);
@@ -571,15 +571,18 @@ ResourceCreationInfo DxRasterExt::load_raster_shader(
         return ResourceCreationInfo::make_invalid();
     }
 }
+DeviceInterface * DxRasterExt::device() noexcept{
+    return &dev;
+}
 void DxRasterExt::destroy_raster_shader(uint64_t handle) noexcept {
     delete reinterpret_cast<RasterShader *>(handle);
 }
 ResourceCreationInfo DxRasterExt::create_depth_buffer(DepthFormat format, uint width, uint height) noexcept {
     ResourceCreationInfo info;
     auto res = new DepthBuffer(
-        &nativeDevice,
+        &dev.nativeDevice,
         width, height,
-        format, nativeDevice.defaultAllocator.get());
+        format, dev.nativeDevice.defaultAllocator.get());
     info.handle = resource_to_handle(res);
     info.native_handle = res->GetResource();
     return info;
