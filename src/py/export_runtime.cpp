@@ -407,31 +407,31 @@ void export_runtime(py::module &m) {
             return 0;
         })
         .def("save_raster_shader", [](DeviceInterface &self, ManagedMeshFormat const &fmt, Function vertex, Function pixel, luisa::string_view str) {
-            ShaderOption option;
-            option.compile_only = true;
-            if (!output_path.empty()) {
-                auto dst_path = output_path / std::filesystem::path{str};
-                option.name = to_string(dst_path);
-            } else {
-                option.name = str;
-            }
-            static_cast<void>(static_cast<RasterExt *>(self.extension(RasterExt::name))
-                                  ->create_raster_shader(fmt.format, vertex, pixel, option));
+            // ShaderOption option;
+            // option.compile_only = true;
+            // if (!output_path.empty()) {
+            //     auto dst_path = output_path / std::filesystem::path{str};
+            //     option.name = to_string(dst_path);
+            // } else {
+            //     option.name = str;
+            // }
+            // static_cast<void>(static_cast<RasterExt *>(self.extension(RasterExt::name))
+            //                       ->create_raster_shader(fmt.format, vertex, pixel, option));
         })
         .def("save_raster_shader_async", [](DeviceInterface &self, ManagedMeshFormat const &fmt, luisa::shared_ptr<FunctionBuilder> const &vertex, luisa::shared_ptr<FunctionBuilder> const &pixel, luisa::string_view str) {
-            thread_pool.create();
-            futures.emplace_back(thread_pool->async([fmt, str = luisa::string{str}, vertex, pixel, &self]() {
-                ShaderOption option;
-                option.compile_only = true;
-                if (!output_path.empty()) {
-                    auto dst_path = output_path / std::filesystem::path{str};
-                    option.name = to_string(dst_path);
-                } else {
-                    option.name = str;
-                }
-                static_cast<void>(static_cast<RasterExt *>(self.extension(RasterExt::name))
-                                      ->create_raster_shader(fmt.format, vertex->function(), pixel->function(), option));
-            }));
+            // thread_pool.create();
+            // futures.emplace_back(thread_pool->async([fmt, str = luisa::string{str}, vertex, pixel, &self]() {
+            //     ShaderOption option;
+            //     option.compile_only = true;
+            //     if (!output_path.empty()) {
+            //         auto dst_path = output_path / std::filesystem::path{str};
+            //         option.name = to_string(dst_path);
+            //     } else {
+            //         option.name = str;
+            //     }
+            //     static_cast<void>(static_cast<RasterExt *>(self.extension(RasterExt::name))
+            //                           ->create_raster_shader(fmt.format, vertex->function(), pixel->function(), option));
+            // }));
         })
         .def("destroy_shader", [](DeviceInterface &self, uint64_t handle) {
             RefCounter::current->DeRef(handle);
