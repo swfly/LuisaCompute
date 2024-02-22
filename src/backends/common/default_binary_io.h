@@ -1,18 +1,18 @@
 #pragma once
 
 #include <shared_mutex>
-
+#include <luisa/core/spin_mutex.h>
 #include <luisa/core/binary_io.h>
 #include <luisa/core/stl/filesystem.h>
 #include <luisa/vstl/common.h>
 #include <luisa/runtime/context.h>
 #include <luisa/core/dynamic_module.h>
+#include <luisa/vstl/lmdb.hpp>
 
 namespace luisa::compute {
 
 class DefaultBinaryIO final : public BinaryIO {
-
-public:
+    public:
     friend class LockedBinaryFileStream;
     struct FileMutex {
         std::shared_mutex mtx;
@@ -23,10 +23,12 @@ public:
 
 private:
     Context _ctx;
-    mutable std::mutex _global_mtx;
+    mutable luisa::spin_mutex _global_mtx;
     mutable MutexMap _mutex_map;
     std::filesystem::path _cache_dir;
     std::filesystem::path _data_dir;
+    mutable vstd::LMDB _data_lmdb;
+    mutable vstd::LMDB _cache_lmdb;
 
 private:
     luisa::unique_ptr<BinaryStream> _read(luisa::string const &file_path) const noexcept;
