@@ -1,4 +1,4 @@
-set_xmakever("2.8.1")
+set_xmakever("2.8.6")
 add_rules("mode.release", "mode.debug", "mode.releasedbg")
 -- pre-defined options
 -- enable mimalloc as default allocator: https://github.com/LuisaGroup/mimalloc
@@ -120,7 +120,9 @@ option_end()
 -- pre-defined options end
 
 -- try options.lua
-includes("scripts/options.lua")
+if os.exists("scripts/options.lua") then
+	includes("scripts/options.lua")	
+end
 if lc_toolchain then
 	for k, v in pairs(lc_toolchain) do
 		set_config(k, v)

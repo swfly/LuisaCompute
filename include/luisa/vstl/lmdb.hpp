@@ -47,9 +47,9 @@ struct LC_VSTL_API LMDBIterator {
     ~LMDBIterator() noexcept;
 
 private:
-    MDB_txn *_txn;
-    MDB_cursor *_cursor;
-    Value _value;
+    MDB_txn *_txn{nullptr};
+    MDB_cursor *_cursor{nullptr};
+    Value _value{};
     bool _finished{false};
     LMDBIterator(MDB_env *env, uint32_t dbi) noexcept;
 };
@@ -64,7 +64,8 @@ class LC_VSTL_API LMDB {
 
 public:
     LMDB(
-        std::filesystem::path db_dir,
+        std::filesystem::path const &db_dir,
+        size_t max_reader = 126ull,
         // 64G as default (should be enough for shader?)
         size_t map_size = 1024ull * 1024ull * 1024ull * 64ull) noexcept;
     LMDB(LMDB const &) = delete;

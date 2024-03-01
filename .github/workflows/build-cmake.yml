@@ -68,7 +68,9 @@ jobs:
           cmake --build build
       - name: "Install"
         run: |
-          sudo cmake --install build --prefix dist -v
+          if [ "${{ matrix.config }}" = "Release" ]; then
+            sudo cmake --install build --prefix dist -v
+          fi
 
   build-macos:
     strategy:

@@ -10,15 +10,14 @@ static void check(int rc) {
 }
 }// namespace lmdb_detail
 LMDB::LMDB(
-    std::filesystem::path db_dir,
+    std::filesystem::path const &db_dir,
+    size_t max_reader,
     size_t map_size) noexcept
     : _path(luisa::to_string(db_dir)),
       _map_size(map_size) {
     using namespace lmdb_detail;
     check(mdb_env_create(&_env));
-    if (std::thread::hardware_concurrency() > 126) {
-        check(mdb_env_set_maxreaders(_env, std::thread::hardware_concurrency()));
-    }
+    check(mdb_env_set_maxreaders(_env, max_reader));
     check(mdb_env_set_mapsize(_env, _map_size));
     if (!std::filesystem::exists(db_dir)) {
         std::filesystem::create_directories(db_dir);
@@ -123,7 +122,7 @@ void LMDB::remove_all(luisa::vector<luisa::vector<std::byte>> &&keys) const noex
     }
     check(mdb_txn_commit(txn));
 }
-LMDB::~LMDB() {
+LMDB::~LMDB() noexcept {
     using namespace lmdb_detail;
     _dispose();
 }
