@@ -117,6 +117,9 @@ public:
         }
         return stage_count();
     }
+    // A continuation may read a result published by this auxiliary queue.
+    // Drain its live work before admitting the named consumer.
+    [[nodiscard]] virtual bool drain_before(luisa::string_view) const noexcept { return false; }
     virtual void prepare_for_admission(Stream &) noexcept {}
     virtual void encode_prepare_for_admission(Stream &stream, CommandList &commands) noexcept {
         if (!commands.empty()) { stream << commands.commit(); }

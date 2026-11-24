@@ -805,12 +805,11 @@ private:
             return candidates;
         };
         auto emit_fused_resume_counts =
-            [resume_count_buffer, queue_count = _queue_count,
-             warp_aggregate_counts](UInt next,
-                                    const luisa::vector<uint> &candidates) noexcept {
+            [resume_count_buffer, queue_count = _queue_count](
+                UInt next, const luisa::vector<uint> &candidates, bool warp_aggregate) noexcept {
                 if (candidates.empty()) { return; }
                 auto resume_count = Expr<Buffer<uint>>{*resume_count_buffer};
-                if (warp_aggregate_counts) {
+                if (warp_aggregate) {
                     $if (warp_active_all_equal(next)) {
                         auto total = warp_active_count_bits(true);
                         $if ((next != 0u) & (next < queue_count) &
@@ -838,7 +837,8 @@ private:
                               execution_block_size = _continuation_block_sizes[0u],
                               token_to_index, fuse_continuation_counts,
                               entry_candidates = std::move(entry_candidates),
-                              emit_fused_resume_counts](
+                              emit_fused_resume_counts,
+                              aggregate = warp_aggregate_counts && !entry_sub.requires_raytracing()](
                                  UInt frame_capacity,
                                  BufferUInt resume_index,
                                  UInt index_offset, UInt frame_offset, UInt global_start,
@@ -888,7 +888,7 @@ private:
                     };
                 }
                 if (fuse_continuation_counts) {
-                    emit_fused_resume_counts(next, entry_candidates);
+                    emit_fused_resume_counts(next, entry_candidates, aggregate);
                 }
             };
             _gen_kernel = _compile_shader(
@@ -915,7 +915,8 @@ private:
                                has_extensions = !_extension_stages.empty(),
                                queue_count = _queue_count,
                                cont_candidates = std::move(cont_candidates),
-                               emit_fused_resume_counts](
+                               emit_fused_resume_counts,
+                               aggregate = warp_aggregate_counts && !cont_sub.requires_raytracing()](
                                   UInt frame_capacity,
                                   BufferUInt resume_index,
                                   UInt resume_offset, UInt count, UInt source_queue,
@@ -983,7 +984,7 @@ private:
                     };
                 }
                 if (fuse_continuation_counts) {
-                    emit_fused_resume_counts(next, cont_candidates);
+                    emit_fused_resume_counts(next, cont_candidates, aggregate);
                 }
             };
             auto option = detail::coro_scheduler_shader_option(
@@ -1819,6 +1820,16 @@ private:
             return _queue_continuation[queue] < nc ?
                        _queue_continuation[queue] : static_cast<uint>(queue);
         };
+        luisa::vector<bool> postpone_auxiliary_consumers(nc, false);
+        if (std::getenv("LUISA_CORO_WAVEFRONT_DEFER_AUXILIARY_CONSUMERS")) {
+            for (size_t continuation = 1u; continuation < nc; ++continuation) {
+                const auto name = _last_dispatch_stats.continuations[continuation].name;
+                for (auto &&registered : _auxiliary_work) {
+                    postpone_auxiliary_consumers[continuation] =
+                        postpone_auxiliary_consumers[continuation] || registered.work->drain_before(name);
+                }
+            }
+        }
         auto resume = [&](size_t continuation, uint source_queue,
                           BufferView<uint> indices, uint count) noexcept {
             pending_commands << _resume_kernels[continuation](
@@ -2061,6 +2072,7 @@ private:
                     auto is_deferred =
                         i < _queue_deferred.size() && _queue_deferred[i] != 0u;
                     if (is_deferred != allow_deferred) { continue; }
+                    if (i < nc && auxiliary_active_count != 0u && postpone_auxiliary_consumers[i]) { continue; }
                     // Compare the complete continuation, not its separately
                     // annotated entry queues. Ascending owners retain tie order.
                     if (logical_count[i] > selected_count) {
@@ -2188,6 +2200,14 @@ private:
                     auto &&registered = _auxiliary_work[i];
                     auto bound =
                         registered.max_emitted_per_continuation[selected_continuation];
+                    auto continuation = _last_dispatch_stats.continuations[selected_continuation].name;
+                    if (registered.work->drain_before(continuation)) {
+                        auto queued = registered.work->host_count();
+                        if (queued > forced_auxiliary_count) {
+                            forced_auxiliary = i;
+                            forced_auxiliary_count = queued;
+                        }
+                    }
                     if (bound == 0u) { continue; }
                     auto queued = registered.work->host_count();
                     auto capacity = registered.work->capacity();

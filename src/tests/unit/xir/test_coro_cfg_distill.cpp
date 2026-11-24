@@ -3365,6 +3365,42 @@ void reg_coro_cfg_distill() {
         expect(xir_verify_module(&m).succeeded());
     };
 
+    "coro_call_structure_continuation_keeps_branching_entry_in_dispatcher"_test = [] {
+        Module m;
+        auto *f = m.create_callable(Type::of<void>());
+        auto *condition = f->create_value_argument(Type::of<bool>());
+        auto *value = f->create_value_argument(Type::of<uint32_t>());
+        auto *out = f->create_reference_argument(Type::of<uint32_t>());
+        auto *entry = f->create_body_block();
+        auto *short_path = f->create_basic_block();
+        auto *loop_header = f->create_basic_block();
+        auto *loop_body = f->create_basic_block();
+        auto *exit_block = f->create_basic_block();
+
+        XIRBuilder b;
+        b.set_insertion_point(entry);
+        b.cond_br(condition, short_path, loop_header);
+        b.set_insertion_point(short_path);
+        b.store(out, value);
+        b.return_void();
+        b.set_insertion_point(loop_header);
+        b.cond_br(condition, loop_body, exit_block);
+        b.set_insertion_point(loop_body);
+        b.store(out, value);
+        b.br(loop_header);
+        b.set_insertion_point(exit_block);
+        b.return_void();
+
+        expect(xir_verify_module(&m).succeeded());
+        coro_call_structure_continuation(f);
+        expect(f->body_block() != entry);
+        expect(xir_verify_module(&m, {.require_no_phi = true,
+                                     .require_no_unstructured_control_flow = true,
+                                     .require_unique_merge_blocks = true,
+                                     .require_canonical_break_continue_targets = true}).succeeded());
+        expect(xir_to_ast_translate(*f->definition(), {.strict = true}) != nullptr);
+    };
+
     "coro_call_structure_continuation_keeps_cyclic_entry_in_dispatcher"_test = [] {
         Module m;
         auto *f = m.create_callable(Type::of<void>());

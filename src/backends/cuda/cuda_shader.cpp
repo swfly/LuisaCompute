@@ -1,4 +1,7 @@
+#include <chrono>
+#include <cstdio>
 #include <cstdlib>
+#include <mutex>
 #include <nvtx3/nvToolsExtCuda.h>
 
 #include <luisa/core/logging.h>
@@ -6,8 +9,61 @@
 #include "cuda_ptx_version.h"
 #include "cuda_shader_printer.h"
 #include "cuda_shader.h"
+#include "cuda_command_encoder.h"
+#include "cuda_error.h"
 
 namespace luisa::compute::cuda {
+
+namespace {
+
+struct ProfiledLaunch {
+    CUstream stream;
+    CUevent begin;
+    CUevent end;
+    luisa::string name;
+    long long host_ns;
+};
+
+struct LaunchTrace {
+    std::mutex mutex;
+    luisa::vector<ProfiledLaunch> launches;
+    FILE *output{nullptr};
+};
+
+LaunchTrace &launch_trace() noexcept {
+    static LaunchTrace trace;
+    return trace;
+}
+
+[[nodiscard]] long long trace_host_ns() noexcept {
+    return std::chrono::duration_cast<std::chrono::nanoseconds>(
+        std::chrono::system_clock::now().time_since_epoch()).count();
+}
+
+} // namespace
+
+void flush_diagnostic_launch_trace(CUstream stream) noexcept {
+    if (std::getenv("LUISA_CUDA_EVENT_TRACE") == nullptr) { return; }
+    auto &trace = launch_trace();
+    std::scoped_lock lock{trace.mutex};
+    auto keep = [&](const ProfiledLaunch &launch) noexcept {
+        if (launch.stream != stream || cuEventQuery(launch.end) == CUDA_ERROR_NOT_READY) {
+            return true;
+        }
+        float gpu_ms = 0.f;
+        LUISA_CHECK_CUDA(cuEventElapsedTime(&gpu_ms, launch.begin, launch.end));
+        std::fprintf(trace.output, "%lld,%f,%s\n", launch.host_ns, gpu_ms, launch.name.c_str());
+        LUISA_CHECK_CUDA(cuEventDestroy(launch.begin));
+        LUISA_CHECK_CUDA(cuEventDestroy(launch.end));
+        return false;
+    };
+    auto end = std::stable_partition(trace.launches.begin(), trace.launches.end(), keep);
+    if (end != trace.launches.end()) {
+        trace.launches.erase(end, trace.launches.end());
+        std::fflush(trace.output);
+    }
+}
+
 
 void CUDAShader::_patch_ptx_version(luisa::vector<std::byte> &ptx) noexcept {
     patch_cuda_ptx_version_bytes(ptx);
@@ -70,7 +126,26 @@ void CUDAShader::launch(CUDACommandEncoder &encoder,
         return _name;
     }();
     if (!name.empty()) { nvtxRangePushA(name.c_str()); }
-    _launch(encoder, command);
+    if (const char *path = std::getenv("LUISA_CUDA_EVENT_TRACE")) {
+        auto stream = encoder.stream()->handle();
+        CUevent begin, end;
+        LUISA_CHECK_CUDA(cuEventCreate(&begin, CU_EVENT_DEFAULT));
+        LUISA_CHECK_CUDA(cuEventCreate(&end, CU_EVENT_DEFAULT));
+        auto host_ns = trace_host_ns();
+        LUISA_CHECK_CUDA(cuEventRecord(begin, stream));
+        _launch(encoder, command);
+        LUISA_CHECK_CUDA(cuEventRecord(end, stream));
+        auto &trace = launch_trace();
+        std::scoped_lock lock{trace.mutex};
+        if (trace.output == nullptr) {
+            trace.output = std::fopen(path, "w");
+            LUISA_ASSERT(trace.output != nullptr, "Could not open CUDA diagnostic trace file.");
+        }
+        trace.launches.emplace_back(ProfiledLaunch{
+            stream, begin, end, name.empty() ? luisa::string{"<unnamed>"} : name, host_ns});
+    } else {
+        _launch(encoder, command);
+    }
     if (!name.empty()) { nvtxRangePop(); }
 }
 

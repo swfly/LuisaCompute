@@ -146,6 +146,11 @@ if (CUDAToolkit_FOUND)
         add_subdirectory(llvm_codegen)
     endif ()
 
+    if (LUISA_COMPUTE_ENABLE_EXPERIMENTAL_CUDA_LLVM_CODEGEN AND TARGET CUDA::nvptxcompiler_static)
+        target_link_libraries(luisa-compute-backend-cuda PRIVATE CUDA::nvptxcompiler_static)
+        target_compile_definitions(luisa-compute-backend-cuda PRIVATE LUISA_CUDA_RELOCATABLE_PTX=1)
+    endif ()
+
     # device runtime library
     find_library(CUDA_DEVICE_RUNTIME_LIBRARY cudadevrt ${CUDAToolkit_LIBRARY_DIR} NO_DEFAULT_PATH)
     if (CUDA_DEVICE_RUNTIME_LIBRARY)

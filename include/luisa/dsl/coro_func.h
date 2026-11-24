@@ -121,6 +121,7 @@ public:
 
     public:
         explicit operator bool() const noexcept { return static_cast<bool>(_f); }
+        [[nodiscard]] bool requires_raytracing() const noexcept { return _f.requires_raytracing(); }
 
         void operator()(CoroFrame &frame, const Var<std::remove_cvref_t<Args>> &...args) const noexcept {
             luisa::vector<const Expression *> source_call_args;

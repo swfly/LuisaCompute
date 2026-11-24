@@ -204,6 +204,7 @@ private:
     uint _snapshot_stride{};
     uint _active_frame_capacity{};
     bool _has_hint_sort{false};
+    bool _read_counters_on_compute_stream{false};
 
 private:
     [[nodiscard]] static auto _find_frame_field_index(
@@ -907,7 +908,8 @@ private:
             LUISA_ASSERT(consumed < submitted,
                          "No graph-wavefront readback is pending.");
             auto &p = pending[consumed % pipeline_depth];
-            if (!_counter_readback_done_event.is_completed(p.done_fence)) {
+            if (!_read_counters_on_compute_stream &&
+                !_counter_readback_done_event.is_completed(p.done_fence)) {
                 if (!allow_wait) { return false; }
                 _last_dispatch_stats.host_wait_count++;
                 Clock wait_clock;
@@ -1074,20 +1076,27 @@ private:
                 _last_dispatch_stats.counter_snapshot_count++;
             }
 
-            auto ready = _counter_snapshot_ready_event.signal();
-            auto ready_fence = ready.fence;
-            stream << std::move(ready);
-            auto done_signal = _counter_readback_done_event.signal();
-            auto done_fence = done_signal.fence;
             auto slot_offset = static_cast<size_t>(slot) * elements_per_slot;
-            _counter_readback_stream
-                << _counter_snapshot_ready_event.wait(ready_fence)
-                << _counter_snapshots.view()
-                       .subview(slot_offset, elements_per_slot)
-                       .copy_to(luisa::span{
-                           _host_snapshots.data() + slot_offset,
-                           elements_per_slot})
-                << std::move(done_signal);
+            auto copy = _counter_snapshots.view()
+                            .subview(slot_offset, elements_per_slot)
+                            .copy_to(luisa::span{_host_snapshots.data() + slot_offset, elements_per_slot});
+            uint64_t done_fence = 0u;
+            if (_read_counters_on_compute_stream) {
+                _last_dispatch_stats.host_wait_count++;
+                Clock wait_clock;
+                stream << std::move(copy) << synchronize();
+                _last_dispatch_stats.host_wait_elapsed_ms += wait_clock.toc();
+            } else {
+                auto ready = _counter_snapshot_ready_event.signal();
+                auto ready_fence = ready.fence;
+                stream << std::move(ready);
+                auto done_signal = _counter_readback_done_event.signal();
+                done_fence = done_signal.fence;
+                _counter_readback_stream
+                    << _counter_snapshot_ready_event.wait(ready_fence)
+                    << std::move(copy)
+                    << std::move(done_signal);
+            }
             pending[submitted % pipeline_depth] = PendingReadback{
                 .slot = slot,
                 .done_fence = done_fence};
@@ -1460,9 +1469,12 @@ public:
             _tail_offsets = device.create_buffer<uint>(_node_count);
         }
         _host_snapshots.resize(snapshot_count);
-        _counter_readback_stream = device.create_stream(StreamTag::COPY);
-        _counter_snapshot_ready_event = device.create_event();
-        _counter_readback_done_event = device.create_event();
+        _read_counters_on_compute_stream = std::getenv("LUISA_GRAPH_WAVEFRONT_COMPUTE_READBACK") != nullptr;
+        if (!_read_counters_on_compute_stream) {
+            _counter_readback_stream = device.create_stream(StreamTag::COPY);
+            _counter_snapshot_ready_event = device.create_event();
+            _counter_readback_done_event = device.create_event();
+        }
         _create_shaders(device, coro);
     }
 

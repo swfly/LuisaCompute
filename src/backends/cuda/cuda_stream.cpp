@@ -14,6 +14,8 @@
 
 namespace luisa::compute::cuda {
 
+void flush_diagnostic_launch_trace(CUstream stream) noexcept;
+
 class StreamCallbackSemaphoreUpdate final {
 
 private:
@@ -195,6 +197,7 @@ CUDAStream::~CUDAStream() noexcept {
     _callback_cv.notify_one();
     // wait for the stream to finish
     LUISA_CHECK_CUDA(cuStreamSynchronize(_stream));
+    flush_diagnostic_launch_trace(_stream);
     _reclaim_staging(true);
     // wait for the callback thread to stop
     _callback_thread.join();
@@ -208,6 +211,7 @@ CUDAStream::~CUDAStream() noexcept {
 void CUDAStream::synchronize() noexcept {
     auto ticket = _current_ticket.load();
     LUISA_CHECK_CUDA(cuStreamSynchronize(_stream));
+    flush_diagnostic_launch_trace(_stream);
     // A drained stream holds no predecessor at all: whatever the next launch
     // enters is not the kernel that just retired.
     clear_pdl_predecessor();
